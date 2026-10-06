@@ -3,6 +3,8 @@ package com.music.bitchord.desktop
 import java.awt.EventQueue
 import java.awt.SystemTray
 import java.awt.TrayIcon
+import java.awt.event.MouseAdapter
+import java.awt.event.MouseEvent
 import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import javax.imageio.ImageIO
@@ -34,8 +36,21 @@ internal object DesktopAwtTray {
                 if (icon != null) return@invokeLater
                 val tray = runCatching { SystemTray.getSystemTray() }.getOrNull() ?: return@invokeLater
                 val art = image ?: blank(tray.trayIconSize.width.coerceAtLeast(16))
-                val created = TrayIcon(art, tooltip, DesktopTrayMenu.awtPopup()).apply {
+                // On macOS the icon opens the menu bar player rather than a menu — see
+                // [DesktopMenuBarPlayer].
+                val menu = if (DesktopMenuBarPlayer.enabled) null else DesktopTrayMenu.awtPopup()
+                val created = TrayIcon(art, tooltip, menu).apply {
                     isImageAutoSize = true
+                    if (DesktopMenuBarPlayer.enabled) {
+                        addMouseListener(
+                            object : MouseAdapter() {
+                                override fun mousePressed(event: MouseEvent) {
+                                    val at = event.locationOnScreen
+                                    EventQueue.invokeLater { DesktopMenuBarPlayer.toggle(at) }
+                                }
+                            },
+                        )
+                    }
                     // Windows opens the menu on right-click itself; the left click is the shortcut
                     // back to the window, which is what every media player there does.
                     addActionListener { EventQueue.invokeLater(onActivate) }
@@ -68,7 +83,7 @@ internal object DesktopAwtTray {
                 tooltip = text
                 val current = icon ?: return@invokeLater
                 current.toolTip = text
-                current.popupMenu = DesktopTrayMenu.awtPopup()
+                if (!DesktopMenuBarPlayer.enabled) current.popupMenu = DesktopTrayMenu.awtPopup()
             }
         }
     }

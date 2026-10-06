@@ -2323,6 +2323,7 @@ fun BitChordDesktopApp() {
         runCatching { Res.readBytes("drawable/logo.svg") }.onSuccess(tray::setIcon)
     }
     LaunchedEffect(tray) {
+        DesktopMenuBarPlayer.attach(playbackEngine)
         DesktopTrayMenu.bind(
             onPlayPause = { if (selectedSong != null) togglePlayPauseFromUser() },
             onNext = ::playNext,

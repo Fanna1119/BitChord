@@ -60,6 +60,21 @@ internal object DesktopTrayMenu {
         quit = onQuit
     }
 
+    /** The same actions the menu runs, for the macOS menu bar player — see [DesktopMenuBarPlayer]. */
+    fun playPause() = post { playPause }
+
+    fun next() = post { next }
+
+    fun previous() = post { previous }
+
+    fun openPlayer() = post { openPlayer }
+
+    fun quit() = post { quit }
+
+    private inline fun post(action: () -> (() -> Unit)) {
+        EventQueue.invokeLater(synchronized(lock) { action() })
+    }
+
     fun onLayoutChanged(listener: (Int) -> Unit) = synchronized(lock) { onLayoutChanged = listener }
 
     /** Keeps the menu's text in step with playback; silent when nothing moved. */

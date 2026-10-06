@@ -159,6 +159,7 @@ private fun desktopMain() = application {
             BitChordDesktopApp()
         }
     }
+    DesktopMenuBarPopover()
 }
 
 private const val MIN_WINDOW_WIDTH_DP = 900.0
