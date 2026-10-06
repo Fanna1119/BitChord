@@ -66,14 +66,18 @@ internal object DesktopUpdateChecker {
     }.getOrNull()
 
     /**
-     * The release names its files `BitChord-<version>-windows-x64-setup.exe` and
-     * `BitChord-<version>-linux-x86_64.AppImage` (see .github/workflows/release.yml); match on the
-     * platform part so a version change does not matter.
+     * The release names its files `BitChord-<version>-windows-x64-setup.exe`,
+     * `BitChord-<version>-linux-x86_64.AppImage` and `BitChord-<version>-macos-arm64.dmg` (see
+     * .github/workflows/release.yml); match on the platform part so a version change does not matter.
      */
     private fun installerUrl(release: JsonObject): String? {
         val suffixes = when {
             DesktopPlatform.isWindows -> listOf("-windows-x64-setup.exe")
             DesktopPlatform.isLinux -> listOf(".AppImage", "-linux-amd64.deb")
+            DesktopPlatform.isMac -> when (System.getProperty("os.arch")) {
+                "aarch64", "arm64" -> listOf("-macos-arm64.dmg")
+                else -> listOf("-macos-x64.dmg")
+            }
             else -> return null
         }
         val assets = release["assets"]?.jsonArray?.mapNotNull { it as? JsonObject }.orEmpty()

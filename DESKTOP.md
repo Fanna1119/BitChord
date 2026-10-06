@@ -1,9 +1,8 @@
 # BitChord Desktop
 
 BitChord now has a Kotlin Multiplatform shared module and a Compose Multiplatform
-desktop application for Linux and Windows. Desktop uses the JVM target, which is
-the supported Compose Multiplatform desktop model; macOS is intentionally not a
-configured target.
+desktop application for Linux, Windows and macOS. Desktop uses the JVM target,
+which is the supported Compose Multiplatform desktop model.
 
 The desktop target uses Java 21. Run it on Linux with the JDK and native
 libraries available in the shell:
@@ -19,6 +18,17 @@ nix-shell -p jdk21 libglvnd glib gtk3 pango atk cairo cmake gdk-pixbuf libXtst l
 On Windows, use a Java 21 shell or install and select a Java 21 JDK before
 running `gradlew.bat :desktopApp:run`.
 
+On macOS, install a Java 21 JDK (and `cmake` for the Automix analyser — the
+Xcode command line tools provide the compiler), then:
+
+```bash
+brew install openjdk@21 cmake
+JAVA_HOME="$(brew --prefix openjdk@21)/libexec/openjdk.jdk/Contents/Home" ./gradlew :desktopApp:run
+```
+
+The build follows the Mac it runs on: Apple Silicon produces an arm64 build,
+an Intel Mac an x64 one. `-Pbitchord.arch=x64` or `arm64` overrides that.
+
 ## Installing a release
 
 Every download on the [releases page](https://github.com/kushagrasinghx/BitChord/releases) carries its own Java
@@ -33,6 +43,8 @@ Nothing else has to be installed first — no JDK, no codec pack.
 | Windows | `BitChord-<version>-windows-x64-setup.exe` | The ordinary installer. Installs for the current user, so it never asks for an administrator. |
 | Windows | `BitChord-<version>-windows-x64.msi` | The same thing for anyone who deploys by MSI. |
 | Windows | `BitChord-<version>-windows-x64-portable.zip` | Unzip anywhere and run `BitChord.exe`. Writes nothing outside the folder. |
+| macOS | `BitChord-<version>-macos-arm64.dmg` | Apple Silicon. Open it and drag BitChord into Applications. |
+| macOS | `BitChord-<version>-macos-x64.dmg` | The same for Intel Macs. |
 
 The Linux packages are built on Ubuntu 22.04 against its glibc, so they install
 on that release and anything newer.
@@ -50,6 +62,14 @@ BitChord starts but Automix never analyses anything, install the
 [Microsoft Visual C++ 2015–2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe)
 and restart it — that is the one dependency the bundled runtime cannot carry
 itself, because Windows expects it to be a system component.
+
+**macOS and Gatekeeper.** The disk images are not signed or notarised, so the
+first launch is refused as coming from an unidentified developer. Right-click
+BitChord in Applications and choose **Open**, or clear the quarantine flag with
+`xattr -dr com.apple.quarantine /Applications/BitChord.app`. Signing in from a
+Chromium browser asks for access to that browser's "Safe Storage" keychain
+entry — that is the key its cookies are encrypted with — and the session itself
+is kept in the login keychain.
 
 ## Building the packages yourself
 
@@ -81,6 +101,15 @@ gradlew.bat :desktopApp:packageMsi
 REM The portable build is the app image, zipped.
 gradlew.bat :desktopApp:createDistributable
 ```
+
+On macOS — Xcode's command line tools are all jpackage needs:
+
+```bash
+bash ./gradlew :desktopApp:packageDmg
+```
+
+Compose refuses to package with Homebrew's JDK; use another distribution such
+as Temurin or Corretto for packaging (running from Homebrew's is fine).
 
 Pass `-Pbitchord.version=1.2.3` to stamp a version other than the one in
 `desktopApp/build.gradle.kts`; a release build takes it from the tag.

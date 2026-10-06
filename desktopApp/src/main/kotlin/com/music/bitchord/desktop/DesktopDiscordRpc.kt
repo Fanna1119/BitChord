@@ -153,7 +153,7 @@ internal object DesktopDiscordRpc {
             runCatching {
                 val client = rpc ?: KizzyRPC(
                     token = _token.value,
-                    os = if (DesktopPlatform.isWindows) "Windows" else "Linux",
+                    os = discordOs,
                     browser = "Discord Client",
                     device = "desktop",
                     userAgent = USER_AGENT,
@@ -261,7 +261,7 @@ internal object DesktopDiscordRpc {
      */
     private val superProperties: String by lazy {
         val fields = mapOf(
-            "os" to if (DesktopPlatform.isWindows) "Windows" else "Linux",
+            "os" to discordOs,
             "browser" to "Discord Client",
             "device" to "",
             "system_locale" to Locale.getDefault().toString(),
@@ -293,6 +293,13 @@ internal object DesktopDiscordRpc {
     private const val ART_PX = 480
     private const val FALLBACK_ART_URL =
         "https://raw.githubusercontent.com/kushagrasinghx/BitChord/main/app/src/main/ic_launcher-playstore.png"
+    /** What Discord's own desktop client reports for this platform. */
+    private val discordOs = when {
+        DesktopPlatform.isWindows -> "Windows"
+        DesktopPlatform.isMac -> "Mac OS X"
+        else -> "Linux"
+    }
+
     private const val CLIENT_VERSION = "0.0.83"
     private const val CLIENT_BUILD = "352675"
     private const val USER_AGENT =

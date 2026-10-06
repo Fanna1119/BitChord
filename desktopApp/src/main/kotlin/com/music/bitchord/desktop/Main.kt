@@ -26,6 +26,12 @@ import kotlin.math.roundToInt
 import org.jetbrains.compose.resources.painterResource
 
 fun main() {
+    if (DesktopPlatform.isMac) {
+        // Read once, when AWT first starts: the menu bar's application name, and a title bar that
+        // follows the system's light or dark appearance instead of staying light.
+        System.setProperty("apple.awt.application.name", "BitChord")
+        System.setProperty("apple.awt.application.appearance", "system")
+    }
     // The player is the phone's, from the shared UI module; this is what it reads underneath.
     PlayerPlatform.install(DesktopPlayerHost)
     com.music.bitchord.ui.AppUi.install(DesktopAppUiHost)

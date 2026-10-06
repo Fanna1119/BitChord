@@ -14,9 +14,8 @@ internal object DesktopAnalysisRuntime {
 
     /** Where unpacked resources live, alongside the desktop log. */
     private val home: Path by lazy {
-        val base = System.getenv("XDG_DATA_HOME")?.takeIf { it.isNotBlank() }
-            ?: "${System.getProperty("user.home")}/.local/share"
-        Path.of(base, "bitchord", "analysis")
+        DesktopPlatform.userDirectory("XDG_DATA_HOME", ".local/share", "Application Support")
+            .resolve("analysis")
     }
 
     /** Where unpacked resources and cached analyses live. */
@@ -36,8 +35,8 @@ internal object DesktopAnalysisRuntime {
             )
         }
         NativeAnalysisLibrary.install {
-            // `mapLibraryName` gives `libbitchord_analysis.so` on Linux and `bitchord_analysis.dll`
-            // on Windows.
+            // `mapLibraryName` gives `libbitchord_analysis.so` on Linux, `bitchord_analysis.dll`
+            // on Windows and `libbitchord_analysis.dylib` on macOS.
             val fileName = System.mapLibraryName(NativeAnalysisLibrary.LIBRARY_NAME)
             System.load(unpack("/native/$fileName", fileName).toString())
         }

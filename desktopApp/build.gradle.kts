@@ -12,11 +12,23 @@ val appVersion: String = providers.gradleProperty("bitchord.version").orNull
 /** Which platform this build is *for*, which is the host unless told otherwise. */
 val hostIsWindows = System.getProperty("os.name").contains("Windows", ignoreCase = true)
 val hostIsLinux = System.getProperty("os.name").contains("Linux", ignoreCase = true)
+val hostIsMac = System.getProperty("os.name").contains("Mac", ignoreCase = true)
 val targetOs: String = (providers.gradleProperty("bitchord.target").orNull ?: when {
     hostIsWindows -> "windows"
     hostIsLinux -> "linux"
-    else -> error("BitChord desktop supports Linux and Windows only")
+    hostIsMac -> "macos"
+    else -> error("BitChord desktop supports Linux, Windows and macOS only")
 }).lowercase()
+
+/**
+ * The CPU the build is for. Linux and Windows ship x86-64 only; a Mac build follows the host, since
+ * Apple Silicon and Intel Macs each need their own natives. `-Pbitchord.arch=x64` overrides it.
+ */
+val targetArch: String = (providers.gradleProperty("bitchord.arch").orNull ?: when {
+    targetOs == "macos" && System.getProperty("os.arch") in setOf("aarch64", "arm64") -> "arm64"
+    else -> "x64"
+}).lowercase()
+val targetIsMacArm = targetOs == "macos" && targetArch == "arm64"
 
 // Windows installer metadata requires MAJOR.MINOR.BUILD even though the app's public version is
 // intentionally displayed without a patch number (1.7 rather than 1.7.0).
@@ -30,7 +42,8 @@ val ffmpegVersion = "7.1.1-$javacppVersion"
 val nativeClassifier = when (targetOs) {
     "windows" -> "windows-x86_64"
     "linux" -> "linux-x86_64"
-    else -> error("BitChord desktop supports Linux and Windows only")
+    "macos" -> if (targetIsMacArm) "macosx-arm64" else "macosx-x86_64"
+    else -> error("BitChord desktop supports Linux, Windows and macOS only")
 }
 private fun localProperty(name: String): String = rootProject.file("local.properties")
     .takeIf { it.isFile }
@@ -65,7 +78,11 @@ dependencies {
     implementation(project(":sharedUi"))
     // BotGuard, for the PoTokens YouTube's web clients need: the phone runs it in an Android
     // WebView, the desktop in JavaFX's (WebKit). Per-platform jars carry the natives.
-    val javafxClassifier = if (targetOs == "windows") "win" else "linux"
+    val javafxClassifier = when (targetOs) {
+        "windows" -> "win"
+        "macos" -> if (targetIsMacArm) "mac-aarch64" else "mac"
+        else -> "linux"
+    }
     listOf("base", "graphics", "controls", "media", "web").forEach { module ->
         implementation("org.openjfx:javafx-$module:21.0.10:$javafxClassifier")
     }
@@ -84,7 +101,8 @@ dependencies {
 
     // The same backdrop blur the Android build uses for its floating bars.
     // On Windows, 1.7.2 keeps this Compose Desktop 1.10.3 app on the matching UI/text/animation
-    // runtime. Preserve Linux's existing dependency graph exactly as it was.
+    // runtime. Preserve Linux's existing dependency graph exactly as it was; macOS resolves the
+    // same UI runtime Linux does, and 1.7.2's blur fails there with a NoSuchMethodError.
     val desktopHazeVersion = if (targetOs == "windows") "1.7.2" else "1.7.3"
     implementation("dev.chrisbanes.haze:haze:$desktopHazeVersion")
     implementation("dev.chrisbanes.haze:haze-materials:$desktopHazeVersion")
@@ -95,7 +113,13 @@ dependencies {
     implementation(compose.components.resources)
     implementation(compose.materialIconsExtended)
     // The Skiko runtime rides in on this, and Skiko is per-platform.
-    implementation(if (targetOs == "windows") compose.desktop.windows_x64 else compose.desktop.linux_x64)
+    implementation(
+        when (targetOs) {
+            "windows" -> compose.desktop.windows_x64
+            "macos" -> if (targetIsMacArm) compose.desktop.macos_arm64 else compose.desktop.macos_x64
+            else -> compose.desktop.linux_x64
+        },
+    )
 
     implementation("io.ktor:ktor-client-core:3.0.3")
     implementation("io.ktor:ktor-client-cio:3.0.3")
@@ -144,7 +168,7 @@ java {
 /** Builds the Automix analyser from the same C++ the Android app compiles. */
 // Per target, because both write the library under the same name and a Windows cross-build
 // otherwise left a `.dll` where the next Linux run looked for its `.so`.
-val analysisNativeDir = layout.buildDirectory.dir("native/$targetOs")
+val analysisNativeDir = layout.buildDirectory.dir("native/$targetOs-$targetArch")
 
 /** The tiny Windows frame bridge is independent of the optional analyser and SMTC libraries. */
 val windowNativeDir = layout.buildDirectory.dir("native-window/$targetOs")
@@ -211,10 +235,12 @@ val buildAnalysisNative by tasks.registering {
     val outputDir = analysisNativeDir.get().asFile
     val crossing = crossBuildingForWindows
     val toolchain = project.file("native/mingw-w64.cmake")
+    val macArchitecture = if (targetOs == "macos") (if (targetIsMacArm) "arm64" else "x86_64") else null
     inputs.dir(rootProject.file("native/analyzer"))
     inputs.dir(rootProject.file("app/src/main/cpp/jni"))
     inputs.dir(project.file("native"))
     inputs.property("target", targetOs)
+    inputs.property("arch", targetArch)
     outputs.dir(outputDir)
     onlyIf {
         val cmake = findOnPath("cmake")
@@ -266,6 +292,8 @@ val buildAnalysisNative by tasks.registering {
                     }
                     add("-DCMAKE_BUILD_TYPE=Release")
                     if (crossing) add("-DCMAKE_TOOLCHAIN_FILE=${toolchain.absolutePath}")
+                    // The dylib has to match the JVM it is bundled with, not whichever Mac built it.
+                    if (macArchitecture != null) add("-DCMAKE_OSX_ARCHITECTURES=$macArchitecture")
                 },
             )
             environment("JAVA_HOME", javaHome)
@@ -499,10 +527,11 @@ compose.desktop {
                 TargetFormat.Msi,
                 TargetFormat.Deb,
                 TargetFormat.Rpm,
+                TargetFormat.Dmg,
             )
             packageName = "BitChord"
             packageVersion = nativePackageVersion
-            description = if (targetOs == "windows") "BitChord" else "Aesthetic YouTube Music client"
+            description = if (targetOs == "linux") "Aesthetic YouTube Music client" else "BitChord"
             vendor = "BitChord contributors"
             copyright = "Copyright © 2026 BitChord contributors"
 
@@ -545,6 +574,17 @@ compose.desktop {
                 shortcut = true
                 dirChooser = false
                 perUserInstall = true
+            }
+
+            macOS {
+                iconFile.set(project.file("packaging/icons/AppIcon.icns"))
+                bundleID = "com.music.bitchord.desktop"
+                appCategory = "public.app-category.music"
+                dockName = "BitChord"
+                // macOS reads the bundle version as MAJOR.MINOR.PATCH with a major above zero,
+                // which the installer version already is.
+                packageVersion = nativePackageVersion
+                dmgPackageVersion = nativePackageVersion
             }
         }
     }

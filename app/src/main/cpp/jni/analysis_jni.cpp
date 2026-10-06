@@ -65,6 +65,12 @@ void AppendNumber(std::string& out, double value) {
   }
   char buffer[32];
   snprintf(buffer, sizeof(buffer), "%.6g", value);
+  // snprintf follows the process locale, and a desktop JVM adopts the user's:
+  // on macOS under en_ZA or de_DE that writes "120,028", which is not JSON.
+  // %g never groups digits, so any comma here can only be the decimal point.
+  for (char* cursor = buffer; *cursor != '\0'; ++cursor) {
+    if (*cursor == ',') *cursor = '.';
+  }
   out += buffer;
 }
 

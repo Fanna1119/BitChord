@@ -94,7 +94,7 @@
 
 Grab the latest signed APK from the [Releases](https://github.com/kushagrasinghx/BitChord/releases) page. Sideloading requires enabling "Install unknown apps" for whichever app you download it with.
 
-For the Windows and Linux desktop app, see [DESKTOP.md](DESKTOP.md).
+For the Windows, Linux and macOS desktop app, see [DESKTOP.md](DESKTOP.md).
 
 </div>
 

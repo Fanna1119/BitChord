@@ -6,7 +6,10 @@ import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
 import org.freedesktop.dbus.types.Variant
 
-/** The platform's own password store, for the credentials this app holds. */
+/**
+ * The platform's own password store, for the credentials this app holds: the Secret Service on
+ * Linux, the login keychain on macOS.
+ */
 internal object DesktopSecretStore {
 
     /** Plain-text transport. */
@@ -32,8 +35,18 @@ internal object DesktopSecretStore {
         null
     }
 
+    /**
+     * The keychain has no free-form attributes, only a service and an account; `application`
+     * and `account` are the two this app files anything under.
+     */
+    private fun keychainService(attributes: Map<String, String>) = attributes["application"].orEmpty()
+
+    private fun keychainAccount(attributes: Map<String, String>) = attributes["account"].orEmpty()
+
     /** The first secret stored under [attributes], as bytes. */
-    fun lookup(attributes: Map<String, String>): ByteArray? = withService { _, service, session ->
+    fun lookup(attributes: Map<String, String>): ByteArray? = if (DesktopPlatform.isMac) {
+        DesktopMacKeychain.find(keychainService(attributes), keychainAccount(attributes))
+    } else withService { _, service, session ->
         val found = service.SearchItems(attributes)
         val items = buildList {
             addAll(found.unlocked)
@@ -47,7 +60,9 @@ internal object DesktopSecretStore {
 
     /** Stores [secret] under [attributes], replacing whatever was there. */
     fun store(label: String, attributes: Map<String, String>, secret: ByteArray): Boolean =
-        withService { connection, service, session ->
+        if (DesktopPlatform.isMac) {
+            DesktopMacKeychain.store(keychainService(attributes), keychainAccount(attributes), secret)
+        } else withService { connection, service, session ->
             val collection = runCatching { service.ReadAlias("default")?.path }
                 .getOrNull()
                 ?.takeIf { it.isNotBlank() && it != "/" }
@@ -70,7 +85,9 @@ internal object DesktopSecretStore {
         } ?: false
 
     /** Forgets everything stored under [attributes]. */
-    fun remove(attributes: Map<String, String>): Boolean = withService { connection, service, _ ->
+    fun remove(attributes: Map<String, String>): Boolean = if (DesktopPlatform.isMac) {
+        DesktopMacKeychain.remove(keychainService(attributes), keychainAccount(attributes))
+    } else withService { connection, service, _ ->
         val found = service.SearchItems(attributes)
         (found.unlocked + found.locked).forEach { path ->
             runCatching {
@@ -85,5 +102,6 @@ internal object DesktopSecretStore {
     } ?: false
 
     /** Whether a store is actually reachable, for the settings screen to say so. */
-    fun isAvailable(): Boolean = withService { _, _, _ -> true } == true
+    fun isAvailable(): Boolean =
+        if (DesktopPlatform.isMac) DesktopMacKeychain.available else withService { _, _, _ -> true } == true
 }
